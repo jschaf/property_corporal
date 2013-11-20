@@ -14,6 +14,16 @@ def make_row_parser(header_row):
     get_cell_value = lambda x: None if x == '' else x
     cast_to_int = lambda x: None if x == '' else int(x)
     cast_to_decimal = lambda x: None if x == '' else Decimal(x).quantize(Decimal("0.00"))
+    is_multi_field = lambda x: x == 'SER|DETECT SN|REG|LOT|SYS NO'
+
+    def split_multi_field(cell_str):
+        if cell_str == '':
+            return []
+        fields = cell_str.split('|')
+        values = [None if x == "~" else x for x in fields]
+        names = ["ser", "detect sn", "reg", "log", "sys no"]
+        assert(len(names) == len(values))
+        return zip(names, values)
 
     row_items = {
         'RECORD TYPE': RowItem('record type', get_cell_value),
@@ -41,8 +51,7 @@ def make_row_parser(header_row):
         'CIIC': RowItem('ciic', get_cell_value),
         'AAC': RowItem('aac', get_cell_value),
         'ABA': RowItem('aba', get_cell_value),
-        'SER|DETECT SN|REG|LOT|SYS NO': RowItem("ser|detect sn|reg|log|sys no",
-                                                get_cell_value)
+        'SER|DETECT SN|REG|LOT|SYS NO': "multi-cell"
     }
 
     row_item_ordered = [row_items[r.value] for r in header_row]
@@ -51,7 +60,10 @@ def make_row_parser(header_row):
         item_dict = {}
         for i, cell in enumerate(row):
             row_item = row_item_ordered[i]
-            item_dict[row_item.name] = row_item.parser(cell.value)
+            if row_item == "multi-cell":
+                item_dict.update(dict(split_multi_field(cell.value)))
+            else:
+                item_dict[row_item.name] = row_item.parser(cell.value)
         return item_dict
 
     return row_parser
@@ -63,6 +75,7 @@ def parse_file(file_name):
     """
     book = xlrd.open_workbook(file_name)
     sheet = book.sheet_by_index(0)
+    # Reserve some space
     data = [None] * sheet.nrows
     for row in range(1, sheet.nrows - 1):
         data[row] = sheet.row_slice(row)
