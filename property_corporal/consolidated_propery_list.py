@@ -6,8 +6,9 @@ class Propety_Book_Item(object):
     """A representation of one item on a property book.
     """
 
-    def __init__(self, LIN):
-        pass
+    def __init__(self, *args, **kwargs):
+        self.__dict__.update(kwargs)
+
 RowItem = namedtuple('RowItem', ['name', 'parser'])
 
 def make_row_parser(header_row):
@@ -21,36 +22,36 @@ def make_row_parser(header_row):
             return []
         fields = cell_str.split('|')
         values = [None if x == "~" else x for x in fields]
-        names = ["ser", "detect sn", "reg", "log", "sys no"]
+        names = ["serial_number", "detect_serial_number", "registration_number", "log", "system_number"]
         assert(len(names) == len(values))
         return zip(names, values)
 
     row_items = {
-        'RECORD TYPE': RowItem('record type', get_cell_value),
-        'LIN': RowItem('lin', get_cell_value),
-        'SUBLIN': RowItem('sublin', get_cell_value),
+        'RECORD TYPE': RowItem('record_type', get_cell_value),
+        'LIN': RowItem('line_item_number', get_cell_value),
+        'SUBLIN': RowItem('sub_line_item_number', get_cell_value),
         'NSN': RowItem('nsn', get_cell_value),
         'PBIC': RowItem('pbic', get_cell_value),
         'TAC': RowItem('tac', get_cell_value),
         'ERC': RowItem('erc', get_cell_value),
         'ECS': RowItem('ecs', get_cell_value),
-        'UIC': RowItem('uic', get_cell_value),
+        'UIC': RowItem('unit_id_code', get_cell_value),
         'NSN Nomenclature': RowItem('nsn nomenclature', get_cell_value),
-        'REQ': RowItem('req', cast_to_int),
-        'AUTH': RowItem('auth', cast_to_int),
-        'OH': RowItem('oh', cast_to_int),
-        'DI': RowItem('di', cast_to_int),
-        'DOCUMENT NO': RowItem('document no', get_cell_value),
-        'SC': RowItem('sc', get_cell_value),
-        'ESD': RowItem('esd', cast_to_int),
-        'UI': RowItem('ui', get_cell_value),
-        'UP': RowItem('up', Decimal),
-        'RICC': RowItem('ricc', get_cell_value),
+        'REQ': RowItem('mtoe_required', cast_to_int),
+        'AUTH': RowItem('authorized', cast_to_int),
+        'OH': RowItem('on-hand', cast_to_int),
+        'DI': RowItem('due-in', cast_to_int),
+        'DOCUMENT NO': RowItem('document_number', get_cell_value),
+        'SC': RowItem('supply_code', get_cell_value),
+        'ESD': RowItem('estimated_ship_date', cast_to_int),
+        'UI': RowItem('unit_issue', get_cell_value),
+        'UP': RowItem('unit_price', Decimal),
+        'RICC': RowItem('reportable_item_control_code', get_cell_value),
         'ECC': RowItem('ecc', get_cell_value),
-        'LCC': RowItem('lcc', get_cell_value),
-        'CIIC': RowItem('ciic', get_cell_value),
+        'LCC': RowItem('logistics_control_code', get_cell_value),
+        'CIIC': RowItem('controlled_item_inventory_code', get_cell_value),
         'AAC': RowItem('aac', get_cell_value),
-        'ABA': RowItem('aba', get_cell_value),
+        'ABA': RowItem('appropriation_budget_activity', get_cell_value),
         'SER|DETECT SN|REG|LOT|SYS NO': "multi-cell"
     }
 
@@ -64,7 +65,7 @@ def make_row_parser(header_row):
                 item_dict.update(dict(split_multi_field(cell.value)))
             else:
                 item_dict[row_item.name] = row_item.parser(cell.value)
-        return item_dict
+        return Propety_Book_Item(**item_dict)
 
     return row_parser
         
@@ -76,6 +77,10 @@ def parse_file(file_name):
     book = xlrd.open_workbook(file_name)
     sheet = book.sheet_by_index(0)
     # Reserve some space
-    data = [None] * sheet.nrows
-    for row in range(1, sheet.nrows - 1):
-        data[row] = sheet.row_slice(row)
+    data = [None] * (sheet.nrows - 1)
+    header_row = sheet.row(0)
+    parse_row = make_row_parser(header_row)
+    for row in range(1, sheet.nrows):
+        data[row - 1] = parse_row(sheet.row_slice(row))
+
+    return data
