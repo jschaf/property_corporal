@@ -2,29 +2,38 @@ from collections import namedtuple
 from decimal import Decimal
 import xlrd
 
-class Propety_Book_Item(object):
-    """A representation of one item on a property book.
-    """
-
-    def __init__(self, *args, **kwargs):
-        self.__dict__.update(kwargs)
 
 RowItem = namedtuple('RowItem', ['name', 'parser'])
 
-def make_row_parser(header_row):
-    get_cell_value = lambda x: None if x == '' else x
-    cast_to_int = lambda x: None if x == '' else int(x)
-    cast_to_decimal = lambda x: None if x == '' else Decimal(x).quantize(Decimal("0.00"))
-    is_multi_field = lambda x: x == 'SER|DETECT SN|REG|LOT|SYS NO'
 
-    def split_multi_field(cell_str):
-        if cell_str == '':
-            return []
-        fields = cell_str.split('|')
-        values = [None if x == "~" else x for x in fields]
-        names = ["serial_number", "detect_serial_number", "registration_number", "log", "system_number"]
-        assert(len(names) == len(values))
-        return zip(names, values)
+def split_multi_field(cell_str):
+    if cell_str == '':
+        return []
+    fields = cell_str.split('|')
+    values = [None if x == "~" else x for x in fields]
+    names = ["serial_number", "detect_serial_number",
+             "registration_number", "log", "system_number"]
+    assert (len(names) == len(values))
+    return zip(names, values)
+
+
+def get_cell_value(x):
+    return None if x == '' else x
+
+
+def cast_to_int(x):
+    return None if x == '' else int(x)
+
+
+def cast_to_decimal(amount):
+    two_places = Decimal(10) ** -2
+    if amount == '':
+        return None
+    else:
+        return Decimal(amount).quantize(two_places)
+
+
+def make_row_parser(header_row):
 
     row_items = {
         'RECORD TYPE': RowItem('record_type', get_cell_value),
@@ -45,7 +54,7 @@ def make_row_parser(header_row):
         'SC': RowItem('supply_code', get_cell_value),
         'ESD': RowItem('estimated_ship_date', cast_to_int),
         'UI': RowItem('unit_issue', get_cell_value),
-        'UP': RowItem('unit_price', Decimal),
+        'UP': RowItem('unit_price', cast_to_decimal),
         'RICC': RowItem('reportable_item_control_code', get_cell_value),
         'ECC': RowItem('ecc', get_cell_value),
         'LCC': RowItem('logistics_control_code', get_cell_value),
@@ -65,22 +74,29 @@ def make_row_parser(header_row):
                 item_dict.update(dict(split_multi_field(cell.value)))
             else:
                 item_dict[row_item.name] = row_item.parser(cell.value)
-        return Propety_Book_Item(**item_dict)
+        return item_dict
 
     return row_parser
-        
-        
+
+
 def parse_file(file_name):
     """
-    Parse `file` and return a representation.
+    Parse `file_name` and return a representation.
     """
+    last_serial_index = 0
     book = xlrd.open_workbook(file_name)
+
+    # The data is always store on the first sheet of the workbook
     sheet = book.sheet_by_index(0)
+
     # Reserve some space
     data = [None] * (sheet.nrows - 1)
+
     header_row = sheet.row(0)
+
     parse_row = make_row_parser(header_row)
     for row in range(1, sheet.nrows):
+        # We start at 0, but the excel sheet starts at 1
         data[row - 1] = parse_row(sheet.row_slice(row))
 
     return data
